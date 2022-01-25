@@ -1,0 +1,32 @@
+
+   
+name: 'Build and deploy to Heroku'
+
+on:
+  push:
+    branches:
+      - 'master'
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      - name: 'Install npm packages'
+        run: |
+          yarn install
+      - name: 'Build production'
+        run: |
+          yarn build
+      - name: 'Upload to Heroku'
+        run: |
+          mkdir -p ~/.ssh
+          eval $(ssh-agent -s)
+          ssh-keyscan -H "${EC2_INSTANCE_IP_V4}" >> ~/.ssh/known_hosts
+          ssh-add <(echo "${EC2_INSTANCE_PRIVATE_KEY}")
+          rsync -avzP ./dist ./node_modules "${EC2_INSTANCE_USER}"@"${EC2_INSTANCE_IP_V4}":"${EC2_INSTANCE_PATH_TO_PROJECT}" --delete
+          ssh "${EC2_INSTANCE_USER}"@"${EC2_INSTANCE_IP_V4}" "source ~/.nvm/nvm.sh && cd ${EC2_INSTANCE_PATH_TO_PROJECT} && pm2 start pm2.json"
+          git push heruko
